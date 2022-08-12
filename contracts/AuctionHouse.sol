@@ -39,34 +39,34 @@ contract AuctionHouse {
     function createAuction(
         uint256 _auctionId,
         uint256 auctionDuration,
-        bytes32 memory _auctionTitle,
+        bytes32 _auctionTitle,
         address _nftContractAddress,
         uint256 _nftTokenId
     ) external returns (bool success) {
-        Auction public memory auction = Auction(
-            false, 
-            _auctionTitle, 
+        Auction memory auction = Auction(
+            false,
+            _auctionTitle,
             _nftContractAddress,
-            payable(msg.sender), 
+            payable(msg.sender),
             msg.sender,
             _nftTokenId,
-            now,
-            now + auctionDuration,
-            0);
+            block.timestamp,
+            block.timestamp + auctionDuration,
+            0
+        );
 
         auctionIdToAuction[auctionId] = auction;
         auctionId++;
-        
     }
 
-    function withdrawBalance() external payable { 
+    function withdrawBalance() external payable {
         require(
             balances[msg.sender] > 0,
             "There is no ETH in corresponding balances to withdraw."
         );
         uint256 amount = balances[msg.sender];
         balances[msg.sender] = 0;
-        (bool success, ) = payable(msg.sender).transfer(amount); //Consider using sendValue instead of transfer
+        (bool success, ) = payable(msg.sender).call{value: amount}(""); //Consider using sendValue instead of transfer
         require(
             success,
             "There was some error with the withdraw transaction. It could not be completed."
@@ -77,7 +77,7 @@ contract AuctionHouse {
         return balances[msg.sender];
     }
 
-    receive() external {
+    receive() external payable {
         /**
          * @dev Make sure any eth sent to contract is receivable
 
