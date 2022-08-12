@@ -46,7 +46,7 @@ contract AuctionHouse {
         Auction public memory auction = Auction(
             false, 
             _auctionTitle, 
-            _nftContractAddress, 
+            _nftContractAddress,
             payable(msg.sender), 
             msg.sender,
             _nftTokenId,
@@ -59,7 +59,7 @@ contract AuctionHouse {
         
     }
 
-    function withdrawBalance() external payable {
+    function withdrawBalance() external payable { 
         require(
             balances[msg.sender] > 0,
             "There is no ETH in corresponding balances to withdraw."
