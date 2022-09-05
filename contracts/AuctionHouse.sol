@@ -19,7 +19,7 @@ contract AuctionHouse is IERC721Receiver {
     }
 
     uint256 public auctionId = 0;
-    uint256 public commission = 5;
+    uint256 public commission = 3;
     address public owner;
 
     mapping(address => uint256) private balances;
@@ -109,34 +109,54 @@ contract AuctionHouse is IERC721Receiver {
     function bid() public view {}
 
     function endAuction(uint256 _auctionId) external {
+        Auction memory auction = auctionIdToAuction[_auctionId];
+        require(auction.auctionEnded == false, "Auction is already closed.");
         require(
-            auctionIdToAuction[_auctionId].auctionEnded == false,
-            "Auction is already closed."
-        );
-        require(
-            auctionIdToAuction[_auctionId].auctionEndTime < block.timestamp,
+            auction.auctionEndTime < block.timestamp,
             "It is not time yet to close auction"
         );
 
-        IERC721 token = IERC721(auctionIdToAuction[_auctionId].nft);
+        IERC721 token = IERC721(auction.nft);
         require(
-            token.ownerOf(auctionIdToAuction[_auctionId].nftTokenId) ==
-                address(this),
+            token.ownerOf(auction.nftTokenId) == address(this),
             "Auction does not own this nft"
         );
-        auctionIdToAuction[_auctionId].auctionEnded = true;
-        balances[
-            auctionIdToAuction[_auctionId].highestBidder
-        ] -= auctionIdToAuction[_auctionId].highestBid;
-        balances[
-            auctionIdToAuction[_auctionId].beneficiary
-        ] += auctionIdToAuction[_auctionId].highestBid;
+        require(
+            balances[auction.highestBidder] >= auction.highestBid,
+            "Not enough capital with highest bidder"
+        );
+
+        auction.auctionEnded = true;
+        balances[auction.highestBidder] -= auction.highestBid;
+        balances[auction.beneficiary] += auction.highestBid;
 
         //Complete changing all state variables before safeTransfer of nft to guard against reentrancy exploits.
         token.safeTransferFrom(
             address(this),
-            auctionIdToAuction[_auctionId].highestBidder,
-            auctionIdToAuction[_auctionId].nftTokenId
+            auction.highestBidder,
+            auction.nftTokenId
+        );
+    }
+
+    /**@dev In event of some issue with the auction or a never ending auction the owner can 
+        terminate the auction.
+        In absence of a more decentralized system for governance this will do for now. 
+     */
+    function forceCloseAuction(uint256 _auctionId) public onlyOwner {
+        Auction memory auction = auctionIdToAuction[_auctionId];
+        IERC721 token = IERC721(auction.nft);
+
+        require(
+            token.ownerOf(auction.nftTokenId) == address(this),
+            "Auction does not own this nft"
+        );
+
+        auction.auctionEnded = true;
+        //Transfer token back to beneficiary
+        token.safeTransferFrom(
+            address(this),
+            auction.beneficiary,
+            auction.nftTokenId
         );
     }
 
@@ -147,7 +167,7 @@ contract AuctionHouse is IERC721Receiver {
         );
         uint256 amount = balances[msg.sender];
         balances[msg.sender] = 0;
-        (bool success, ) = payable(msg.sender).call{value: amount}(""); //Consider using call instead of transfer
+        (bool success, ) = payable(msg.sender).call{value: amount}(""); //Consider using sendValue instead of transfer
         require(
             success,
             "There was some error with the withdraw transaction. It could not be completed."
@@ -155,6 +175,7 @@ contract AuctionHouse is IERC721Receiver {
     }
 
     function setCommission(uint256 _newCommision) external onlyOwner {
+        //Cap on maxmium commission is 8 %. Default value being 3 %.
         commission = (_newCommision > 8) ? 8 : _newCommision;
     }
 
